@@ -1,0 +1,341 @@
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useRole } from "../context/useRole";
+import { apiRegister, saveAuth } from "../utils/api";
+import { CLAY_BASE, CLAY_AUTH, injectClay } from "../styles/claystyles";
+import OtpField from "../components/OtpField";
+import { Eye, EyeOff } from "lucide-react";
+
+const PAGE_CSS = `
+  @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+  @keyframes shake { 0%,100%{transform:translateX(0);} 20%,60%{transform:translateX(-6px);} 40%,80%{transform:translateX(6px);} }
+  .clay-logo { font-family:'Nunito',sans-serif; font-weight:900; font-size:1.4rem; background:linear-gradient(135deg,#e040fb,#42a5f5); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .clay-logo span { -webkit-text-fill-color:#66bb6a; }
+  .clay-nav { display:flex; align-items:center; justify-content:space-between; padding:16px 48px; background:rgba(255,255,255,.55); backdrop-filter:blur(14px); border-bottom:2px solid rgba(255,255,255,.7); box-shadow:0 4px 24px rgba(0,0,0,.06); position:sticky; top:0; z-index:100; }
+  .clay-nav-tag { font-size:.82rem; font-weight:600; color:#7a7a9a; }
+  .clay-main { flex:1; display:flex; align-items:center; justify-content:center; padding:52px 24px; position:relative; z-index:1; }
+  .register-card { background:rgba(255,255,255,.68); backdrop-filter:blur(20px); border:2.5px solid rgba(255,255,255,.88); border-radius:32px; padding:48px 44px; width:100%; max-width:500px; box-shadow:0 12px 48px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.95); animation:fadeUp .7s ease both; position:relative; overflow:hidden; }
+  .register-card::before { content:''; position:absolute; top:0; left:0; right:0; height:5px; background:linear-gradient(90deg,#66bb6a,#42a5f5,#e040fb); border-radius:32px 32px 0 0; }
+  .register-icon { width:72px; height:72px; border-radius:22px; margin:0 auto 24px; display:flex; align-items:center; justify-content:center; font-size:2rem; background:linear-gradient(135deg,#c8e6c9,#e8f5e9); border:2px solid rgba(255,255,255,.9); box-shadow:0 6px 20px rgba(102,187,106,.2),inset 0 1px 0 rgba(255,255,255,.8); }
+  .register-title { font-family:'Nunito',sans-serif; font-size:1.9rem; font-weight:900; color:#2d2d4e; text-align:center; margin-bottom:4px; }
+  .register-sub { text-align:center; color:#7a7a9a; font-size:.88rem; margin-bottom:32px; }
+  .form-group { margin-bottom:20px; }
+  .clay-divider { display:flex; align-items:center; gap:12px; margin:24px 0; }
+  .clay-divider-line { flex:1; height:2px; background:rgba(255,255,255,.7); border-radius:4px; }
+  .clay-divider-text { font-size:.75rem; font-weight:600; color:#9a9ab0; white-space:nowrap; }
+  .role-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:2px; }
+  .role-option { padding:16px 14px; border-radius:18px; cursor:pointer; border:2.5px solid rgba(255,255,255,.8); background:rgba(255,255,255,.55); backdrop-filter:blur(10px); box-shadow:0 4px 14px rgba(0,0,0,.07),inset 0 1px 0 rgba(255,255,255,.9); transition:all .2s; text-align:center; position:relative; overflow:hidden; }
+  .role-option::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:18px 18px 0 0; opacity:0; transition:opacity .2s; }
+  .role-option.tenant-option::before { background:linear-gradient(90deg,#42a5f5,#90caf9); }
+  .role-option.owner-option::before  { background:linear-gradient(90deg,#66bb6a,#a5d6a7); }
+  .role-option:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.9); }
+  .role-option.selected { border-color:rgba(66,165,245,.5); background:rgba(255,255,255,.8); box-shadow:0 6px 20px rgba(0,0,0,.1),0 0 0 3px rgba(66,165,245,.15),inset 0 1px 0 rgba(255,255,255,.95); transform:translateY(-2px); }
+  .role-option.selected::before { opacity:1; }
+  .role-option.owner-selected { border-color:rgba(102,187,106,.5); box-shadow:0 6px 20px rgba(0,0,0,.1),0 0 0 3px rgba(102,187,106,.15),inset 0 1px 0 rgba(255,255,255,.95); }
+  .role-emoji { font-size:1.8rem; margin-bottom:8px; display:block; }
+  .role-name { font-family:'Nunito',sans-serif; font-weight:800; font-size:.95rem; color:#2d2d4e; margin-bottom:4px; }
+  .role-desc { font-size:.72rem; color:#7a7a9a; line-height:1.4; }
+  .selected-dot { position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%; background:linear-gradient(135deg,#42a5f5,#1e88e5); color:white; font-size:.65rem; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(66,165,245,.4); animation:fadeIn .2s ease; }
+  .owner-dot { background:linear-gradient(135deg,#66bb6a,#43a047); box-shadow:0 2px 6px rgba(102,187,106,.4); }
+  .clay-error { background:rgba(255,235,238,.85); border:2px solid rgba(239,154,154,.6); border-radius:14px; padding:12px 16px; margin-bottom:20px; color:#c62828; font-size:.85rem; font-weight:500; animation:shake .4s ease,fadeIn .3s ease; display:flex; align-items:center; gap:8px; }
+  .verify-warn { background:rgba(255,249,196,.8); border:1.5px solid rgba(255,224,130,.6); border-radius:12px; padding:10px 14px; font-size:.78rem; color:#f57f17; font-weight:600; margin-bottom:16px; }
+  .clay-btn-green { width:100%; padding:15px 24px; border:none; border-radius:16px; font-family:'Poppins',sans-serif; font-size:1rem; font-weight:700; cursor:pointer; transition:transform .15s,box-shadow .15s,filter .15s; background:linear-gradient(135deg,#66bb6a,#43a047); color:white; box-shadow:0 6px 0 #2e7d32,0 10px 24px rgba(102,187,106,.4),inset 0 1px 0 rgba(255,255,255,.3); margin-top:8px; }
+  .clay-btn-green:hover:not(:disabled) { filter:brightness(1.06); transform:translateY(-2px); }
+  .clay-btn-green:active { transform:scale(.97) translateY(2px) !important; }
+  .clay-btn-green:disabled { opacity:.6; cursor:not-allowed; }
+  .register-footer-text { text-align:center; font-size:.85rem; color:#7a7a9a; margin-top:24px; }
+  .clay-link { color:#42a5f5; font-weight:700; text-decoration:none; }
+  .clay-link:hover { color:#1e88e5; text-decoration:underline; }
+  .clay-footer { background:rgba(255,255,255,.5); backdrop-filter:blur(12px); border-top:2px solid rgba(255,255,255,.7); padding:22px 48px; }
+  .clay-footer-inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  .clay-footer-copy { font-size:.82rem; color:#7a7a9a; font-weight:500; }
+  .clay-footer-links { display:flex; gap:6px; }
+  .clay-footer-btn { background:rgba(255,255,255,.72); outline:1.5px solid rgba(255,255,255,.85); border:none; border-radius:10px; padding:7px 16px; font-family:'Poppins',sans-serif; font-size:.8rem; font-weight:600; color:#5a5a7a; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,.07); transition:transform .15s,color .15s; }
+  .clay-footer-btn:hover { color:#e040fb; transform:translateY(-2px); }
+  .clay-field-error { color:#c62828; font-size:.78rem; font-weight:600; margin-top:6px; display:flex; align-items:center; gap:5px; animation:fadeIn .25s ease; }
+  .pwd-rules { background:rgba(240,245,255,.85); border:1.5px solid rgba(180,200,255,.6); border-radius:12px; padding:10px 14px; margin-top:8px; animation:fadeIn .3s ease; }
+  .pwd-rules-title { font-size:.76rem; font-weight:700; color:#5a5a7a; margin-bottom:7px; }
+  .pwd-rule { font-size:.76rem; font-weight:600; display:flex; align-items:center; gap:7px; margin-bottom:4px; transition:color .2s; }
+  .pwd-rule.ok  { color:#2e7d32; }
+  .pwd-rule.bad { color:#b71c1c; }
+  .pwd-rule-icon { font-size:.8rem; }
+  .pwd-wrap { position:relative; }
+  .pwd-eye  { position:absolute; right:14px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#9a9ab0; display:flex; align-items:center; padding:0; transition:color .15s; }
+  .pwd-eye:hover { color:#5a5a7a; }
+
+`;
+
+const css = injectClay(CLAY_BASE, CLAY_AUTH, PAGE_CSS);
+
+const ROLES = [
+  { value: "tenant", emoji: "🏠", label: "Tenant", desc: "Search & apply for PG accommodations", selClass: "selected", dotClass: "" },
+  { value: "owner", emoji: "🏢", label: "PG Owner", desc: "List & manage PG properties", selClass: "owner-selected", dotClass: "owner-dot" },
+];
+
+export default function Register() {
+  const navigate = useNavigate();
+  const { setRole } = useRole();
+
+  const [selectedRole, setSelectedRole] = useState("");
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pwdTouched, setPwdTouched] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+
+  // ── Validation helpers ──────────────────────────────────────────────
+  const isPwdLongEnough = (v) => v.length >= 5;
+  const hasPwdLetter = (v) => /[A-Za-z]/.test(v);
+  const hasPwdNumber = (v) => /[0-9]/.test(v);
+  const hasPwdSpecial = (v) => /[^A-Za-z0-9]/.test(v);
+  const isPwdValid = (v) =>
+    isPwdLongEnough(v) && hasPwdLetter(v) && hasPwdNumber(v) && hasPwdSpecial(v);
+
+  // Name must have at least two words (Firstname Lastname)
+  const hasTwoWords = (v) => v.trim().split(/\s+/).filter(Boolean).length >= 2;
+
+  // Auto-capitalise each word, allow only letters + single spaces
+  const handleNameChange = (e) => {
+    let raw = e.target.value;
+    // Strip characters that are not letters or spaces
+    raw = raw.replace(/[^A-Za-z\s]/g, "");
+    // Collapse multiple consecutive spaces into one
+    raw = raw.replace(/  +/g, " ");
+    // Capitalise first letter of each word
+    const titled = raw.replace(/(^|\s)([a-z])/g, (_, space, char) => space + char.toUpperCase());
+    setName(titled);
+
+    if (titled.trim() && !hasTwoWords(titled)) {
+      setNameError("Full name must contain at least two words (e.g. John Doe).");
+    } else {
+      setNameError("");
+    }
+  };
+
+  const handleConfirmChange = (e) => {
+    setConfirmPwd(e.target.value);
+    if (e.target.value && e.target.value !== password) {
+      setConfirmError("Passwords do not match.");
+    } else {
+      setConfirmError("");
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!selectedRole) { setError("Please select a role to continue."); return; }
+    if (!emailVerified) { setError("Please verify your email address before registering."); return; }
+
+    const trimmedName = name.trim();
+    if (!hasTwoWords(trimmedName)) { setNameError("Full name must contain at least two words (e.g. John Doe)."); setError("Please fix the errors above."); return; }
+    if (!isPwdValid(password)) { setError("Password does not meet the requirements listed below."); setPwdTouched(true); return; }
+    if (confirmPwd !== password) { setConfirmError("Passwords do not match."); setError("Please fix the errors above."); return; }
+
+    setLoading(true);
+    try {
+      const data = await apiRegister({ name: trimmedName, email, password, role: selectedRole });
+      saveAuth(data.token, data.user);
+      setRole(data.user.role);
+      if (data.user.role === "tenant") navigate("/tenant/dashboard");
+      else if (data.user.role === "owner") navigate("/owner/dashboard");
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="clay-page">
+        <nav className="clay-nav">
+          <div className="clay-logo">PG<span>Stay</span></div>
+          <div className="clay-nav-tag">🏠 Smart PG Management</div>
+        </nav>
+
+        <main className="clay-main">
+          <div className="register-card">
+            <div className="register-icon">✨</div>
+            <h2 className="register-title">Create Account</h2>
+            <p className="register-sub">Join PGStay and find your perfect home</p>
+
+            {error && <div className="clay-error"><span>⚠️</span> {error}</div>}
+
+            <form onSubmit={handleSubmit}>
+              {/* Name */}
+              <div className="form-group">
+                <label className="clay-label">Full Name</label>
+                <input
+                  className="clay-input"
+                  type="text"
+                  placeholder="First and Last name (e.g. John Doe)"
+                  required
+                  value={name}
+                  onChange={handleNameChange}
+                  onBlur={() => {
+                    const trimmed = name.trim();
+                    if (trimmed && !hasTwoWords(trimmed))
+                      setNameError("Full name must contain at least two words (e.g. John Doe).");
+                  }}
+                />
+                {nameError && (
+                  <div className="clay-field-error">
+                    <span>⚠️</span> {nameError}
+                  </div>
+                )}
+              </div>
+
+              {/* Email + OTP */}
+              <OtpField
+                type="email"
+                value={email}
+                onChange={(val) => { setEmail(val); setEmailVerified(false); }}
+                onVerified={() => setEmailVerified(true)}
+                accent="#42a5f5"
+                accentDark="#1565c0"
+              />
+
+              {/* Password */}
+              <div className="form-group">
+                <label className="clay-label">Password</label>
+                <div className="pwd-wrap">
+                  <input
+                    className="clay-input"
+                    type={showPwd ? "text" : "password"}
+                    placeholder="Create a strong password"
+                    required
+                    value={password}
+                    style={{ paddingRight: 42 }}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setPwdTouched(true);
+                      // Re-validate confirm as password changes
+                      if (confirmPwd && e.target.value !== confirmPwd) {
+                        setConfirmError("Passwords do not match.");
+                      } else {
+                        setConfirmError("");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="pwd-eye"
+                    onClick={() => setShowPwd((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showPwd ? "Hide password" : "Show password"}
+                  >
+                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {pwdTouched && (
+                  <div className="pwd-rules">
+                    <div className="pwd-rules-title">Password Requirements:</div>
+                    {[
+                      { ok: isPwdLongEnough(password), label: "At least 5 characters" },
+                      { ok: hasPwdLetter(password), label: "Contains at least one letter (a–z, A–Z)" },
+                      { ok: hasPwdNumber(password), label: "Contains at least one number (0–9)" },
+                      { ok: hasPwdSpecial(password), label: "Contains at least one special character (!@#$…)" },
+                    ].map(({ ok, label }) => (
+                      <div key={label} className={`pwd-rule ${ok ? "ok" : "bad"}`}>
+                        <span className="pwd-rule-icon">{ok ? "✅" : "❌"}</span>
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div className="form-group">
+                <label className="clay-label">Confirm Password</label>
+                <div className="pwd-wrap">
+                  <input
+                    className="clay-input"
+                    type={showConfirm ? "text" : "password"}
+                    placeholder="Re-enter your password"
+                    required
+                    value={confirmPwd}
+                    style={{ paddingRight: 42 }}
+                    onChange={handleConfirmChange}
+                  />
+                  <button
+                    type="button"
+                    className="pwd-eye"
+                    onClick={() => setShowConfirm((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
+                  >
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {confirmError && (
+                  <div className="clay-field-error">
+                    <span>⚠️</span> {confirmError}
+                  </div>
+                )}
+              </div>
+
+              {/* Role */}
+              <div className="form-group">
+                <label className="clay-label">I am a… *</label>
+                <div className="role-grid">
+                  {ROLES.map((r) => {
+                    const isSelected = selectedRole === r.value;
+                    return (
+                      <div key={r.value}
+                        className={`role-option ${r.value}-option ${isSelected ? r.selClass : ""}`}
+                        onClick={() => setSelectedRole(r.value)}>
+                        {isSelected && <div className={`selected-dot ${r.dotClass}`}>✓</div>}
+                        <span className="role-emoji">{r.emoji}</span>
+                        <div className="role-name">{r.label}</div>
+                        <div className="role-desc">{r.desc}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {!emailVerified && (
+                <div className="verify-warn">⚠️ Please verify your email before submitting.</div>
+              )}
+
+              <button type="submit" className="clay-btn-green" disabled={loading}>
+                {loading ? "⏳ Creating account..." : "Create Account →"}
+              </button>
+            </form>
+
+            <div className="clay-divider">
+              <div className="clay-divider-line" />
+              <span className="clay-divider-text">Already have an account?</span>
+              <div className="clay-divider-line" />
+            </div>
+            <p className="register-footer-text">
+              <Link to="/login" className="clay-link">Login here</Link>
+            </p>
+          </div>
+        </main>
+
+        <footer className="clay-footer">
+          <div className="clay-footer-inner">
+            <div className="clay-footer-copy">© {new Date().getFullYear()} PGStay · All rights reserved</div>
+            <div className="clay-footer-links">
+              {[["About", "/about"], ["Contact", "/contact"], ["Help", "/help"]].map(([l, p]) => (
+                <button key={l} className="clay-footer-btn" onClick={() => navigate(p)}>{l}</button>
+              ))}
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
+  );
+}
